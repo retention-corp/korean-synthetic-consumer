@@ -79,3 +79,7 @@ python scripts/sample_personas.py --dataset examples/example-personas.json --n 2
 - Separate `positive`, `conditional`, and `negative` reactions.
 - Treat WTP as directional only.
 - Always state the next real-world validation step.
+
+## Validation ladder
+
+Before treating outputs as business evidence, follow `docs/validation-ladder.md`: synthetic panel → real interview → behavioral test → decision memo.

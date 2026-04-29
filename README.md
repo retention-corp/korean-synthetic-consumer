@@ -27,6 +27,8 @@ source .venv/bin/activate
 python -m pip install -r requirements.txt
 ```
 
+For offline-only usage with `examples/example-personas.json`, you can skip `requirements.txt` and use Python 3 standard library only. Install optional dependencies only when you want Hugging Face/DuckDB access.
+
 The package is light by default. It does **not** download the full dataset during install or build.
 
 ## Quickstart
@@ -67,6 +69,56 @@ Run the offline self-check:
 ```bash
 scripts/self_check.sh
 ```
+
+## Use as an OpenClaw / Claude skill
+
+Option A — use directly from this repository:
+
+```bash
+git clone https://github.com/hackinggrowth/korean-synthetic-consumer.git
+cd korean-synthetic-consumer
+python3 scripts/self_check.sh
+```
+
+Option B — install as a local skill copy:
+
+```bash
+mkdir -p ~/.openclaw/skills/korean-synthetic-consumer
+cp -R SKILL.md README.md scripts templates examples requirements.txt LICENSE ~/.openclaw/skills/korean-synthetic-consumer/
+```
+
+Suggested prompt:
+
+```text
+Use korean-synthetic-consumer in message-test mode.
+Product/message: <paste copy or concept>
+Target segment: Korean SMB owners / B2B SaaS marketers / etc.
+Panel size: 5 personas.
+Output: skeptical reactions, objection map, revised message, next real-world validation.
+```
+
+## Real-data smoke test
+
+After installing optional dependencies, run a tiny Hugging Face smoke test:
+
+```bash
+python3 scripts/sample_personas.py \
+  --dataset nvidia/Nemotron-Personas-Korea \
+  --n 2 \
+  --seed 7 \
+  --region 서울 \
+  --output markdown \
+  --cache-dir .cache/huggingface
+```
+
+If this fails because of network, Hugging Face auth, or schema changes, continue with local JSON examples and re-check the dataset card before production use.
+
+## Recommended validation ladder
+
+1. Synthetic panel: find likely objections and weak claims.
+2. Real customer interviews: validate whether objections actually appear.
+3. Small message/prototype test: measure behavior, not just stated preference.
+4. Decision memo: mark findings as `[hypothesis]`, `[verified]`, or `[experimental]`.
 
 ## Use modes
 

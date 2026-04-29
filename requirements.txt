@@ -1,0 +1,5 @@
+# Optional runtime packages. Scripts fail gracefully if these are not installed.
+datasets>=2.18
+huggingface_hub>=0.22
+duckdb>=0.10
+pyarrow>=15

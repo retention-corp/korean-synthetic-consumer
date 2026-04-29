@@ -1,0 +1,35 @@
+[
+  {
+    "name": "김민지",
+    "age": 32,
+    "gender": "여성",
+    "region": "서울 마포구",
+    "occupation": "B2B SaaS 마케터",
+    "persona_type": "early-adopter",
+    "life_stage": "1인 가구 직장인",
+    "summary": "새로운 업무 자동화 도구를 빨리 써보지만, 팀 도입 전에는 보안과 기존 워크플로 연동을 확인한다.",
+    "pain_points": "반복 제안서 작성, 고객사별 메시지 튜닝, 내부 승인 자료 준비"
+  },
+  {
+    "name": "박준호",
+    "age": 45,
+    "gender": "남성",
+    "region": "경기 성남시",
+    "occupation": "제조업 영업팀장",
+    "persona_type": "mainstream-pragmatist",
+    "life_stage": "초등 자녀 2명, 맞벌이",
+    "summary": "새 도구 자체보다 영업 실적과 팀원의 실제 사용률을 중시한다. 가격과 교육 부담에 민감하다.",
+    "pain_points": "제안서 품질 편차, 팀원별 고객 대응 톤 차이, CRM 입력 누락"
+  },
+  {
+    "name": "이서연",
+    "age": 28,
+    "gender": "여성",
+    "region": "부산 해운대구",
+    "occupation": "프리랜서 디자이너",
+    "persona_type": "skeptical-value-seeker",
+    "life_stage": "독립 프리랜서",
+    "summary": "AI 도구를 여러 번 결제했다가 해지한 경험이 있어 과장된 생산성 메시지에 회의적이다.",
+    "pain_points": "클라이언트 커뮤니케이션, 견적서 작성, 포트폴리오 업데이트 시간 부족"
+  }
+]

@@ -93,7 +93,7 @@ def compact_record(record: Dict[str, Any]) -> Dict[str, Any]:
         field = infer_field(flat, [key])
         if field and field not in compact and flat.get(field) not in (None, ""):
             compact[field] = flat[field]
-    if "raw" not in compact:
+    if not compact:
         # Keep a short text source for changing schemas without shipping huge rows.
         compact["source_excerpt"] = record_text(flat)[:1200]
     return compact
@@ -111,7 +111,7 @@ def load_from_json(path: Path) -> List[Dict[str, Any]]:
     return [item for item in data if isinstance(item, dict)]
 
 
-def load_from_hf(dataset_id: str, cache_dir: Optional[str]) -> List[Dict[str, Any]]:
+def load_from_hf(dataset_id: str, cache_dir: Optional[str]) -> Iterable[Dict[str, Any]]:
     try:
         from datasets import load_dataset  # type: ignore
     except ImportError:
@@ -131,9 +131,9 @@ def load_from_hf(dataset_id: str, cache_dir: Optional[str]) -> List[Dict[str, An
             f"Original error: {exc.__class__.__name__}: {exc}"
         )
 
-    # Keep memory usage bounded: datasets.Dataset supports iteration and len, but for a CLI sample
-    # we can materialize a filtered prefix only after shuffling in streaming-like fashion below.
-    return [dict(row) for row in ds]
+    # Return the iterable dataset directly. Sampling below uses reservoir sampling so the CLI does
+    # not materialize the full Hugging Face dataset in memory.
+    return (dict(row) for row in ds)
 
 
 def try_duckdb_note(cache_dir: Optional[str]) -> Optional[str]:
@@ -148,17 +148,28 @@ def try_duckdb_note(cache_dir: Optional[str]) -> Optional[str]:
 
 def sample_records(records: Iterable[Dict[str, Any]], args: argparse.Namespace) -> List[Dict[str, Any]]:
     rng = random.Random(args.seed)
-    filtered = [
-        compact_record(flatten_record(r))
-        for r in records
-        if matches_filter(flatten_record(r), "region", args.region)
-        and matches_filter(flatten_record(r), "occupation", args.occupation)
-        and matches_filter(flatten_record(r), "persona_type", args.persona_type)
-        and matches_filter(flatten_record(r), "life_stage", args.life_stage)
-        and matches_query(flatten_record(r), args.query)
-    ]
-    rng.shuffle(filtered)
-    return filtered[: args.n]
+    sample: List[Dict[str, Any]] = []
+    matched_count = 0
+    for record in records:
+        flat = flatten_record(record)
+        if not (
+            matches_filter(flat, "region", args.region)
+            and matches_filter(flat, "occupation", args.occupation)
+            and matches_filter(flat, "persona_type", args.persona_type)
+            and matches_filter(flat, "life_stage", args.life_stage)
+            and matches_query(flat, args.query)
+        ):
+            continue
+        matched_count += 1
+        compact = compact_record(flat)
+        if len(sample) < args.n:
+            sample.append(compact)
+        else:
+            replace_at = rng.randrange(matched_count)
+            if replace_at < args.n:
+                sample[replace_at] = compact
+    rng.shuffle(sample)
+    return sample
 
 
 def to_markdown(personas: Sequence[Dict[str, Any]], dataset: str) -> str:

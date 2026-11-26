@@ -10,10 +10,59 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
-MODE = "You are conducting a Korean research interview. Return one spoken follow-up question in Korean."
+MODE = ("You are interviewing a user in Korean. Ask one short, polite follow-up question "
+        "about the specific issue the participant described in their last reply. Write only "
+        "the question, as a single spoken Korean sentence ending in a question mark.")
 CRITERIA = ("Credit the respondent's correction, use their last answer, invite a concrete past example, "
             "and avoid guessing causes, pitching fixes, multiple demands or leading the witness. "
             "An equivalent natural question is valid. Do not predict the hidden continuation.")
+
+
+def question_prompt(dialogue, guide):
+    return f"{MODE}\nInterview guide:\n{guide}\nConversation:\n{dialogue}"
+
+
+def is_korean_question(answer):
+    answer = answer.strip()
+    return (bool(re.fullmatch(r"[^?\r\n!。！？]*[가-힣][^?\r\n!。！？]*\?", answer))
+            and not re.search(r"\.\s", answer))
+
+
+def run_model(command, prompt):
+    response = subprocess.run(shlex.split(command), input=prompt, capture_output=True,
+                              text=True, encoding="utf-8", timeout=300, check=True).stdout.strip()
+    if not response:
+        raise ValueError("Empty model response")
+    return response
+
+
+def judge_pair(dialogue, answers, ask, first=0):
+    """Return the preferred answer in its original order, plus both presentations."""
+    judgments = []
+    for index in (first, 1 - first):
+        verdict = ask(
+            "Independently judge the two next questions. "
+            "If they ask for the same information, including identical wording or paraphrases, choose TIE. "
+            f"{CRITERIA} Penalize any question that relies on a premise explicitly rejected by the respondent. "
+            "Reply with A, B or TIE as your first line, then one sentence of evidence.\n" + dialogue +
+            f"\nA: {answers[index]}\nB: {answers[1 - index]}"
+        )
+        match = re.match(r"^(A|B|TIE)[ \t]*(?:\r?\n|[:.])\s*\S", verdict, re.IGNORECASE)
+        preference = match[1].upper() if match else "invalid"
+        if index and preference in {"A", "B"}:
+            preference = "B" if preference == "A" else "A"
+        judgments.append(dict(reversed=bool(index), preference=preference, response=verdict))
+    first_choice, second_choice = (item["preference"] for item in judgments)
+    if "invalid" in (first_choice, second_choice):
+        return "invalid", judgments
+    return (first_choice if first_choice == second_choice else "disagreement"), judgments
+
+
+def beats_original(results):
+    winners = [result["winner"] for result in results]
+    return (not {"disagreement", "invalid"}.intersection(winners)
+            and winners.count("candidate") > winners.count("original")
+            and all(is_korean_question(result["candidate"]) for result in results))
 
 
 def main():
@@ -30,18 +79,16 @@ def main():
     trace = args.out / "trace.jsonl"
 
     def ask(prompt, command=None):
-        response = subprocess.run(shlex.split(command or args.runner), input=prompt, capture_output=True,
-                                  text=True, timeout=300, check=True).stdout.strip()
-        if not response:
-            raise ValueError("Empty model response")
+        response = run_model(command or args.runner, prompt)
         with trace.open("a", encoding="utf-8") as file:
             print(json.dumps({"prompt": prompt, "response": response}, ensure_ascii=False), file=file)
         return response
 
     cases = json.loads(args.cases.read_text())
     template = (ROOT / "templates/interview-script.md").read_text()
+
     def question(case, guide):
-        return ask(f"{MODE}\nInterview guide:\n{guide}\nConversation:\n{case['dialogue']}")
+        return ask(question_prompt(case["dialogue"], guide))
 
     development = [case for case in cases if case["split"] == "development"]
     holdout = [case for case in cases if case["split"] == "holdout"]
@@ -61,24 +108,18 @@ def main():
     def compare(split, group, candidate):
         results = []
         for case in group:
+            first = rng.randrange(2)
             for trial in range(args.repeats if split == "holdout" else 1):
-                # Balance presentation order within each case. Hide the labels from the judge.
-                if trial == 0:
-                    first = rng.randrange(2)
-                order = (first + trial) % 2
-                guides = [template, candidate] if order == 0 else [candidate, template]
-                answers = [question(case, guide) for guide in guides]
-                verdict = ask(f"Independently judge the two next questions. {CRITERIA} "
-                              "Reply with A, B or TIE as your first line, then one sentence of evidence. "
-                              "Tie equally useful answers.\n" + case['dialogue'] +
-                              "\nA: " + answers[0] + "\nB: " + answers[1], args.judge)
-                label = verdict.splitlines()[0].strip().upper()
-                if label not in {"A", "B", "TIE"}:
-                    raise ValueError(f"Invalid judge label: {label}")
-                winner = "tie" if label == "TIE" else (
-                    "candidate" if (label == "B") == (order == 0) else "original")
+                original, revised = (question(case, guide) for guide in (template, candidate))
+                preference, judgments = judge_pair(
+                    case["dialogue"], (original, revised),
+                    lambda prompt: ask(prompt, args.judge), first=(first + trial) % 2,
+                )
+                winner = {"A": "original", "B": "candidate", "TIE": "tie",
+                          "disagreement": "disagreement", "invalid": "invalid"}[preference]
                 results.append(dict(case=case["id"], split=split, trial=trial+1, winner=winner,
-                                    original=answers[order], candidate=answers[1-order], reason=verdict))
+                                    original=original, candidate=revised, reason=judgments[0]["response"],
+                                    judgments=judgments))
         return results
 
     feedback = ""
@@ -87,16 +128,18 @@ def main():
         results = compare("development", development, candidate)
         (args.out / f"candidate-{attempt}.md").write_text(candidate)
         (args.out / f"development-{attempt}.json").write_text(json.dumps(results, ensure_ascii=False, indent=2))
-        if sum(r["winner"] == "candidate" for r in results) > sum(r["winner"] == "original" for r in results):
+        if beats_original(results):
             break
         feedback = json.dumps(results, ensure_ascii=False)
     (args.out / "candidate.md").write_text(candidate)
-    results.extend(compare("holdout", holdout, candidate))
+    holdout_results = compare("holdout", holdout, candidate)
+    verdict = beats_original(results) and beats_original(holdout_results)
+    results += holdout_results
     wins = {split: {w: sum(r["split"] == split and r["winner"] == w for r in results)
-                    for w in ["original", "candidate", "tie"]} for split in ["development","holdout"]}
+                    for w in ["original", "candidate", "tie", "disagreement", "invalid"]}
+            for split in ["development", "holdout"]}
     malformed = [r["case"] for r in results
-                 if not re.fullmatch(r"[^?\n]*[가-힣][^?\n]*\?", r["candidate"].strip())]
-    verdict = not malformed and all(c["candidate"] > c["original"] and c["candidate"] > 0 for c in wins.values())
+                 if not is_korean_question(r["candidate"])]
     report = dict(attempts=attempt, malformed_candidate_cases=malformed, template_sha256=hashlib.sha256(template.encode()).hexdigest(), counts=wins,
                   decision="review_candidate" if verdict else "keep_original", results=results)
     (args.out / "report.json").write_text(json.dumps(report, indent=2, ensure_ascii=False) + "\n")

@@ -54,6 +54,34 @@ The generator was Qwen3-4B-Instruct-2507 Q8_0 at temperature 0.2. Gemma 3
   24 judgments. For one identical pair, the judge correctly tied the answers
   but incorrectly described their wording as different.
 
+### Asking about past actions
+
+The follow-up change was frozen after two public development cases. We compared
+it against the byte-identical original upstream template at `129fb60` using the
+same local Qwen3 4B generator and temperature 0.2. Six new fictional dialogues
+were sampled twice per version. The [case snapshot](fixtures/2026-11-26-action-holdout.json)
+records the inputs used for this comparison.
+
+- One reviewer inspected the 24 shuffled questions. The original passed 0 of 12
+  and the revision passed 12 of 12. A pass required one Korean question about
+  what the participant actually did in a specific past situation, grounded in
+  their correction and without assuming an action.
+- The Gemma 3 judge agreed with itself in both A/B orders on one pair, which
+  favored the revision. The other eleven pairs changed verdict when swapped.
+  A separate single-question prompt matched six of nine calibration controls.
+  The content result comes from direct review.
+- These observations cover follow-up questions for six fictional dialogues.
+  Each dialogue contributes two generations per template.
+
+Tessl ran the same six dialogues once per version with
+`claude:deepseek-v4.1-flash-1017` for generation and scoring. The upstream guide
+scored 47/60 overall and 14/24 for past action. One proposed edit from SkillOpt's
+failure-minibatch analyst scored 52/60 overall and 17/24 for past action. The
+hand-edited Retention guide scored 60/60 overall and 24/24 for past action. It
+scored higher than upstream on four dialogues and tied on two. Scoring used the
+generated question written to `answer.txt`. Use run `01a215d0-6200-7200-8311-e6e0c319895d` in the
+[Tessl project](https://tessl.io/go/projects/01a215ca-f945-7571-a5e6-4138722257de).
+
 ## Compare interview guides
 
 Run from the repository root. Use Python 3 and a command that reads a prompt from stdin and writes only its model answer to stdout.

@@ -24,4 +24,4 @@ command = ["llama-completion", "-m", str(args.model.expanduser()), "--no-convers
 result = subprocess.run(command, stdin=subprocess.DEVNULL, capture_output=True, text=True)
 if result.returncode:
     sys.exit(result.stderr[-1500:])
-print(result.stdout.removesuffix("[end of text]\n").strip())
+print(result.stdout.strip().removesuffix("[end of text]").strip())

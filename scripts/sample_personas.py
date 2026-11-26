@@ -85,6 +85,8 @@ def matches_query(record: Dict[str, Any], query: Optional[str]) -> bool:
 def compact_record(record: Dict[str, Any]) -> Dict[str, Any]:
     flat = flatten_record(record)
     compact: Dict[str, Any] = {}
+    if flat.get("uuid"):
+        compact["uuid"] = flat["uuid"]
     for logical, aliases in FIELD_ALIASES.items():
         field = infer_field(flat, aliases)
         if field and flat.get(field) not in (None, ""):
@@ -109,6 +111,20 @@ def load_from_json(path: Path) -> List[Dict[str, Any]]:
     if not isinstance(data, list):
         raise ValueError("JSON input must be a list or an object with personas/items/rows/data list")
     return [item for item in data if isinstance(item, dict)]
+
+
+def load_local(path: Path) -> Iterable[Dict[str, Any]]:
+    if path.is_file() and path.suffix.lower() != ".parquet":
+        yield from load_from_json(path)
+        return
+    files = sorted(path.glob("*.parquet")) if path.is_dir() else [path]
+    if not files:
+        raise ValueError(f"No Parquet files in {path}")
+    import pyarrow.parquet as pq
+
+    for file in files:
+        for batch in pq.ParquetFile(file).iter_batches(batch_size=1024):
+            yield from batch.to_pylist()
 
 
 def load_from_hf(dataset_id: str, cache_dir: Optional[str]) -> Iterable[Dict[str, Any]]:
@@ -161,13 +177,12 @@ def sample_records(records: Iterable[Dict[str, Any]], args: argparse.Namespace) 
         ):
             continue
         matched_count += 1
-        compact = compact_record(flat)
         if len(sample) < args.n:
-            sample.append(compact)
+            sample.append(compact_record(flat))
         else:
             replace_at = rng.randrange(matched_count)
             if replace_at < args.n:
-                sample[replace_at] = compact
+                sample[replace_at] = compact_record(flat)
     rng.shuffle(sample)
     return sample
 
@@ -189,7 +204,7 @@ def parse_args(argv: Optional[Sequence[str]] = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Sample Korean synthetic personas from nvidia/Nemotron-Personas-Korea or a local JSON file."
     )
-    parser.add_argument("--dataset", default=DEFAULT_DATASET, help="Hugging Face dataset id or local JSON file path")
+    parser.add_argument("--dataset", default=DEFAULT_DATASET, help="Hugging Face dataset id or path to JSON, a Parquet file, or a directory of Parquet shards")
     parser.add_argument("--n", type=int, default=5, help="number of personas to sample")
     parser.add_argument("--seed", type=int, default=42, help="random seed")
     parser.add_argument("--region", help="best-effort region/location filter")
@@ -211,7 +226,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     source_path = Path(args.dataset)
     try:
         if source_path.exists():
-            records = load_from_json(source_path)
+            records = load_local(source_path)
         else:
             note = try_duckdb_note(args.cache_dir)
             if note:

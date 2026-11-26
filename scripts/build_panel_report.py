@@ -46,7 +46,8 @@ def persona_card(persona: Dict[str, Any], idx: int) -> str:
         ] if part
     )
     summary = val(persona, "summary", "description", "persona", "source_excerpt", default="")
-    return f"### P{idx}. {name}\n- 기본: {basics or '-'}\n- 세그먼트: {val(persona, 'persona_type', 'type', 'segment', default='-')}\n- 라이프스테이지: {val(persona, 'life_stage', 'lifeStage', 'age_group', default='-')}\n- 배경/단서: {summary[:700] or '-'}\n"
+    source_id = f"- 원본 UUID: {persona['uuid']}\n" if persona.get("uuid") else ""
+    return f"### P{idx}. {name}\n{source_id}- 기본: {basics or '-'}\n- 세그먼트: {val(persona, 'persona_type', 'type', 'segment', default='-')}\n- 라이프스테이지: {val(persona, 'life_stage', 'lifeStage', 'age_group', default='-')}\n- 배경/단서: {summary[:700] or '-'}\n"
 
 
 def mode_questions(mode: str) -> str:

@@ -1,0 +1,5 @@
+[
+  {"id":"compost","split":"development","dialogue":"진행자: 통이 작아서 불편했나요?\n참여자: 공간은 충분해요. 언제 뒤집어야 하는지 모르겠어요."},
+  {"id":"baking","split":"development","dialogue":"진행자: 오븐이 예열되는 시간이 너무 긴가요?\n참여자: 기다리는 건 괜찮아요. 제 반죽이 준비됐는지 판단하기 힘들어요."},
+  {"id":"board-game","split":"holdout","dialogue":"진행자: 게임 규칙이 복잡했어요?\n참여자: 규칙은 다 알아요. 모임에서 처음 온 사람을 끼워 주기가 어려웠어요."}
+]

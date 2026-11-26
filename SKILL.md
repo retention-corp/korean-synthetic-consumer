@@ -61,6 +61,10 @@ python scripts/sample_personas.py --dataset examples/example-personas.json --n 2
    ```bash
    python scripts/sample_personas.py --n 5 --region 서울 --output json > personas.json
    ```
+   For downloaded NVIDIA shards use `--dataset /path/to/data` (PyArrow required).
+   Keep each returned UUID alongside the synthetic answers in your report.
+   If zero records match, report zero and describe the filter before changing it.
+
    Offline fallback:
    ```bash
    python scripts/sample_personas.py --dataset examples/example-personas.json --n 3 --output json
